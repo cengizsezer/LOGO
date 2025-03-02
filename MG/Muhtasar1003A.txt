@@ -2,7 +2,7 @@ alter view dbo.CS_MUHTASAR_1003A as
 
 select 
 'TEZ_MEDİKAL' AS Firma, 
-_muhasebeFis.DATE_ [TARİH],
+CONVERT(nvarchar(20), _muhasebeFis.DATE_,104) as Tarih,
 _muhasebeFis.BRANCH [İŞYERİ],
 muhasebehareket.YEAR_ [YIL],
 muhasebehareket.MONTH_ [AY], 
@@ -30,7 +30,17 @@ CLC.DEFINITION_ [UNVAN],
 CASE CLC.ISPERSCOMP WHEN 0 THEN CLC.TAXNR ELSE CLC.TCKNO END  [TC/V.NO],
 CLC.TAXNR,
 CLC.TCKNO,
-FT.FICHENO [FATURA NO],
+--FT.FICHENO,
+COALESCE(
+    FT.FICHENO, 
+    CASE 
+        WHEN CHARINDEX(',', muhasebehareket.LINEEXP) > 0 
+        THEN SUBSTRING(muhasebehareket.LINEEXP, 1, CHARINDEX(',', muhasebehareket.LINEEXP) - 1)
+        ELSE muhasebehareket.LINEEXP
+    END
+) AS [FATURA NO],
+
+
 
   
 (CASE  
