@@ -1,4 +1,14 @@
-alter view dbo.CS_MUHTASAR_1003A as
+USE [NETLINE_TIGER]
+GO
+
+/****** Object:  View [dbo].[CS_MUHTASAR_1003A]    Script Date: 3/3/2025 9:20:47 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+ALTER view [dbo].[CS_MUHTASAR_1003A] as
 
 select 
 'TEZ_MEDİKAL' AS Firma, 
@@ -26,7 +36,7 @@ EMCENTER.DEFINITION_ [M.M.Aciklamasi],
 PROJECT.CODE [PROJE KODU],
 PROJECT.NAME [PROJE ADI],
 CLC.CODE [KOD],
-CLC.DEFINITION_ [UNVAN],
+RIGHT(CLC.DEFINITION_, CHARINDEX('-', REVERSE(CLC.DEFINITION_) + '-') - 1) AS IsimSoyisim,
 CASE CLC.ISPERSCOMP WHEN 0 THEN CLC.TAXNR ELSE CLC.TCKNO END  [TC/V.NO],
 CLC.TAXNR,
 CLC.TCKNO,
@@ -36,7 +46,7 @@ COALESCE(
     CASE 
         WHEN CHARINDEX(',', muhasebehareket.LINEEXP) > 0 
         THEN SUBSTRING(muhasebehareket.LINEEXP, 1, CHARINDEX(',', muhasebehareket.LINEEXP) - 1)
-        ELSE muhasebehareket.LINEEXP
+        ELSE FT.FICHENO
     END
 ) AS [FATURA NO],
 
@@ -65,7 +75,17 @@ CASE WHEN muhasebehareket.TRCURR=0 THEN 'TL'
 WHEN muhasebehareket.TRCURR=1 THEN 'USD' 
 WHEN muhasebehareket.TRCURR=20 THEN 'EUR' END [İD.TÜR],
 
-_muhasebeFis.SPECODE [FİŞ ÖZELKOD]
+_muhasebeFis.SPECODE [FİŞ ÖZELKOD],
+
+ 
+  CASE  
+    WHEN COALESCE(CLC.TAXNR, '') IN ('11111111', '222222222') THEN 284  
+    WHEN COALESCE(_muhasebeHesap.CODE, '') = '360.01.01.00002' THEN 41  
+    WHEN COALESCE(_muhasebeHesap.CODE, '') = '360.01.01.00004' THEN 141  
+    ELSE 999  
+  END AS BYNKOD
+
+
 FROM 
 lg_201_01_EMFLINE muhasebehareket   
 LEFT JOIN LG_201_01_EMFICHE _muhasebeFis
@@ -93,6 +113,5 @@ LEFT JOIN LG_201_01_INVOICE FT
 WHERE muhasebehareket.CANCELLED=0  
 AND muhasebehareket.YEAR_ IN ('2025')
 AND _muhasebeHesap.CODE  LIKE ('360.01.01.%')
-or _muhasebeHesap.CODE  LIKE ('191.01.02.%')
 
 GO
