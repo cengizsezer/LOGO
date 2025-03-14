@@ -1,12 +1,3 @@
-USE [NETLINE_TIGER]
-GO
-
-SET ANSI_NULLS ON
-GO
-
-SET QUOTED_IDENTIFIER ON
-GO
-
 ALTER VIEW [dbo].[CS_MUHTASAR_1003A] AS
 WITH CTE AS (
     SELECT 
@@ -43,20 +34,26 @@ WITH CTE AS (
         END AS [TC/V.NO],
         CLC.TAXNR,
         CLC.TCKNO,
-        COALESCE(
-            FT.FICHENO, 
-            CASE 
-                WHEN CHARINDEX(',', muhasebehareket.LINEEXP) > 0 
-                THEN SUBSTRING(muhasebehareket.LINEEXP, 1, CHARINDEX(',', muhasebehareket.LINEEXP) - 1)
-                ELSE FT.FICHENO
-            END
-        ) AS [FATURA NO],
+        --COALESCE(
+        --    FT.FICHENO, 
+        --    CASE 
+        --        WHEN CHARINDEX(',', muhasebehareket.LINEEXP) > 0 
+        --        THEN SUBSTRING(muhasebehareket.LINEEXP, 1, CHARINDEX(',', muhasebehareket.LINEEXP) - 1)
+        --        ELSE FT.FICHENO
+        --    END
+        --) AS [FATURA NO],
+
+		CASE 
+			WHEN CHARINDEX(',', muhasebehareket.LINEEXP) > 0 
+			THEN SUBSTRING(muhasebehareket.LINEEXP, 1, CHARINDEX(',', muhasebehareket.LINEEXP) - 1)
+			ELSE muhasebehareket.LINEEXP
+			END AS [FATURA NO],
         
         (CASE 
-            WHEN muhasebehareket.SIGN = 1 AND ACC.CREDEBNET <> 0 THEN ACC.CREDEBNET   
-            WHEN muhasebehareket.SIGN = 0 AND ACC.CREDEBNET <> 0 THEN 0  
+            WHEN muhasebehareket.SIGN = 1 AND ACC_AyrıntiTablosu.CREDEBNET <> 0 THEN ACC_AyrıntiTablosu.CREDEBNET   
+            WHEN muhasebehareket.SIGN = 0 AND ACC_AyrıntiTablosu.CREDEBNET <> 0 THEN 0  
             ELSE muhasebehareket.CREDIT 
-        END) AS [STOPAJ_TUTAR],
+			END) AS [STOPAJ_TUTAR],
 
         _muhasebeFis.TOTALACTIVE AS [FİŞ TOPLAMI],
 
@@ -77,13 +74,14 @@ WITH CTE AS (
         END AS BYNKOD
     FROM 
         lg_201_01_EMFLINE muhasebehareket   
-        LEFT JOIN LG_201_01_EMFICHE _muhasebeFis ON muhasebehareket.ACCFICHEREF = _muhasebeFis.LOGICALREF
-        LEFT JOIN lg_201_EMUHACC _muhasebeHesap ON muhasebehareket.ACCOUNTREF = _muhasebeHesap.LOGICALREF
-        LEFT JOIN lg_201_01_ACCDISTDETLN ACC ON ACC.PREVLINEREF = muhasebehareket.LOGICALREF
-        LEFT JOIN lg_201_EMCENTER EMCENTER ON ACC.CENTERREF = EMCENTER.LOGICALREF
-        LEFT JOIN lg_201_PROJECT PROJECT ON PROJECT.LOGICALREF = ACC.PROJECTREF
-        LEFT JOIN LG_201_CLCARD CLC ON CLC.CODE = muhasebehareket.CLCODE
-        LEFT JOIN LG_201_01_INVOICE FT ON FT.CLIENTREF = CLC.LOGICALREF
+        inner JOIN LG_201_01_EMFICHE _muhasebeFis ON muhasebehareket.ACCFICHEREF = _muhasebeFis.LOGICALREF
+        inner JOIN lg_201_EMUHACC _muhasebeHesap ON muhasebehareket.ACCOUNTREF = _muhasebeHesap.LOGICALREF
+        inner JOIN lg_201_01_ACCDISTDETLN ACC_AyrıntiTablosu ON  muhasebehareket.LOGICALREF = ACC_AyrıntiTablosu.PREVLINEREF
+        inner JOIN lg_201_EMCENTER EMCENTER ON ACC_AyrıntiTablosu.CENTERREF = EMCENTER.LOGICALREF
+        inner JOIN lg_201_PROJECT PROJECT ON   ACC_AyrıntiTablosu.PROJECTREF = PROJECT.LOGICALREF
+		inner JOIN LG_201_01_INVOICE FT ON FT.ACCFICHEREF = _muhasebeFis.LOGICALREF
+		inner JOIN LG_201_CLCARD CLC ON FT.CLIENTREF = CLC.LOGICALREF
+        --LEFT JOIN LG_201_01_INVOICE FT ON FT.CLIENTREF = CLC.LOGICALREF
     WHERE 
         muhasebehareket.CANCELLED = 0  
         AND muhasebehareket.YEAR_ IN ('2025')
@@ -119,9 +117,13 @@ SELECT
             2
         )
         ELSE 0  
-    END AS GAYRİSAFİ_TUTAR
-
+    END AS GAYRİSAFİ_TUTAR,
+CASE 
+        WHEN COUNT(*) OVER (PARTITION BY CTE.KOD) > 1 THEN 'Evet'  
+        ELSE 'Hayır'  
+    END AS [BİRDEN FAZLA KAYIT VAR MI?]
 FROM CTE;
 
-GO
 
+
+GO
