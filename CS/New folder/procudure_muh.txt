@@ -1,0 +1,246 @@
+USE [NETLINE_TIGER]
+GO
+
+/****** Object:  StoredProcedure [dbo].[Get_CS_MUHTASAR_1003A_Data]    Script Date: 3/17/2025 12:48:20 AM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+
+ALTER PROCEDURE [dbo].[Get_CS_MUHTASAR_1003A_Data]
+AS
+BEGIN
+    -- Tablo değişkenini tanımla
+    DECLARE @CombinedTable TABLE (
+        Firma NVARCHAR(50),
+        Tarih NVARCHAR(20),
+        [İŞYERİ] SMALLINT,
+        [YIL] SMALLINT,
+        [AY] SMALLINT,
+        [GRUP] NVARCHAR(1),
+        [GRUP AÇIKLAMA] NVARCHAR(50),
+        [KEBİR AÇIKLAMA] NVARCHAR(50),
+        [KEBİR] INT,
+        [SATIR AÇIKLAMASI] NVARCHAR(250),
+        [FIS_NO] NVARCHAR(50),
+        [HESAP KODU] NVARCHAR(50),
+        [HESAP ADI] NVARCHAR(150),
+        [HESAP ADI2] NVARCHAR(150),
+        [ÖZEL KOD] NVARCHAR(50),
+        [M.M.Kodu] NVARCHAR(50),
+        [M.M.Aciklamasi] NVARCHAR(150),
+        [PROJE KODU] NVARCHAR(50),
+        [PROJE ADI] NVARCHAR(150),
+        [KOD] NVARCHAR(50),
+        IsimSoyisim NVARCHAR(150),
+        [TC/V.NO] NVARCHAR(50),
+        TAXNR NVARCHAR(50),
+        TCKNO NVARCHAR(50),
+        [FATURA NO] NVARCHAR(50),
+        STOPAJ_TUTAR DECIMAL(18, 2),
+        [FİŞ TOPLAMI] DECIMAL(18, 2),
+        [İD.TÜR] NVARCHAR(50),
+        [FİŞ ÖZELKOD] NVARCHAR(50),
+        BYNKOD INT,
+        Source INT,
+        STOPAJ_ORANI INT,
+        GAYRİSAFİ_TUTAR DECIMAL(18, 2),
+        [BİRDEN FAZLA KAYIT VAR MI?] NVARCHAR(5)
+    );
+
+    -- Verileri tablo değişkenine ekle
+    INSERT INTO @CombinedTable
+    SELECT
+        CombinedData.*,
+        CASE
+            WHEN CombinedData.BYNKOD = 41 THEN 20
+            WHEN CombinedData.BYNKOD = 141 THEN 17
+            WHEN CombinedData.BYNKOD = 22 THEN 15
+            WHEN CombinedData.BYNKOD = 284 THEN 20
+            ELSE 0
+        END AS STOPAJ_ORANI,
+        CASE
+            WHEN (CASE
+                    WHEN CombinedData.BYNKOD = 41 THEN 20
+                    WHEN CombinedData.BYNKOD = 141 THEN 17
+                    WHEN CombinedData.BYNKOD = 22 THEN 15
+                    WHEN CombinedData.BYNKOD = 284 THEN 20
+                    ELSE 0
+                END) <> 0
+            THEN ROUND(
+                    (CombinedData.STOPAJ_TUTAR * 100) /
+                    (CASE
+                        WHEN CombinedData.BYNKOD = 41 THEN 20
+                        WHEN CombinedData.BYNKOD = 141 THEN 17
+                        WHEN CombinedData.BYNKOD = 22 THEN 15
+                        WHEN CombinedData.BYNKOD = 284 THEN 20
+                        ELSE 0
+                    END),
+                    2
+                )
+            ELSE 0
+        END AS GAYRİSAFİ_TUTAR,
+        CASE
+            WHEN COUNT(*) OVER (PARTITION BY CombinedData.KOD) > 1 THEN 'Evet'
+            ELSE 'Hayır'
+        END AS [BİRDEN FAZLA KAYIT VAR MI?]
+    FROM (
+        -- İlk veri kaynağı (lg_201)
+        SELECT
+            'TEZ_MEDİKAL' AS Firma,
+            CONVERT(nvarchar(20), _muhasebeFis.DATE_, 104) AS Tarih,
+            _muhasebeFis.BRANCH AS [İŞYERİ],
+            muhasebehareket.YEAR_ AS [YIL],
+            muhasebehareket.MONTH_ AS [AY],
+            LEFT(muhasebehareket.KEBIRCODE, 1) AS [GRUP],
+            CASE
+                WHEN LEFT(muhasebehareket.KEBIRCODE, 1) = 1 THEN 'SORUMLU SIFATIYLA İNDİRİLECEK'
+                WHEN LEFT(muhasebehareket.KEBIRCODE, 1) = 3 THEN 'ÖDENECEK STOPAJ'
+            END AS [GRUP AÇIKLAMA],
+            CASE
+                WHEN muhasebehareket.KEBIRCODE = 191 THEN '191.İNDİRİLECEK KDV'
+                WHEN muhasebehareket.KEBIRCODE = 360 THEN '360.ÖDENECEK VERGİ VE FONLAR'
+            END AS [KEBİR AÇIKLAMA],
+            muhasebehareket.KEBIRCODE AS [KEBİR],
+            muhasebehareket.LINEEXP AS [SATIR AÇIKLAMASI],
+            _muhasebeFis.FICHENO AS [FIS_NO],
+            _muhasebeHesap.CODE AS [HESAP KODU],
+            _muhasebeHesap.DEFINITION_ AS [HESAP ADI],
+            _muhasebeHesap.EXTNAME AS [HESAP ADI2],
+            _muhasebeHesap.SPECODE AS [ÖZEL KOD],
+            EMCENTER.CODE AS [M.M.Kodu],
+            EMCENTER.DEFINITION_ AS [M.M.Aciklamasi],
+            PROJECT.CODE AS [PROJE KODU],
+            PROJECT.NAME AS [PROJE ADI],
+            CLC.CODE AS [KOD],
+            RIGHT(CLC.DEFINITION_, CHARINDEX('-', REVERSE(CLC.DEFINITION_) + '-') - 1) AS IsimSoyisim,
+            CASE CLC.ISPERSCOMP
+                WHEN 0 THEN CLC.TAXNR
+                ELSE CLC.TCKNO
+            END AS [TC/V.NO],
+            CLC.TAXNR,
+            CLC.TCKNO,
+            CASE
+                WHEN CHARINDEX(',', muhasebehareket.LINEEXP) > 0
+                THEN SUBSTRING(muhasebehareket.LINEEXP, 1, CHARINDEX(',', muhasebehareket.LINEEXP) - 1)
+                ELSE muhasebehareket.LINEEXP
+            END AS [FATURA NO],
+            (CASE
+                WHEN muhasebehareket.SIGN = 1 AND ACC_AyrıntiTablosu.CREDEBNET <> 0 THEN ACC_AyrıntiTablosu.CREDEBNET
+                WHEN muhasebehareket.SIGN = 0 AND ACC_AyrıntiTablosu.CREDEBNET <> 0 THEN 0
+                ELSE muhasebehareket.CREDIT
+            END) AS [STOPAJ_TUTAR],
+            _muhasebeFis.TOTALACTIVE AS [FİŞ TOPLAMI],
+            CASE
+                WHEN muhasebehareket.TRCURR = 0 THEN 'TL'
+                WHEN muhasebehareket.TRCURR = 1 THEN 'USD'
+                WHEN muhasebehareket.TRCURR = 20 THEN 'EUR'
+            END AS [İD.TÜR],
+            _muhasebeFis.SPECODE AS [FİŞ ÖZELKOD],
+            CASE
+                WHEN COALESCE(CLC.TAXNR, '') IN ('1111111111', '2222222222') AND COALESCE(_muhasebeHesap.CODE, '') = '360.01.01.00004' THEN 284
+                WHEN COALESCE(_muhasebeHesap.CODE, '') = '360.01.01.00002' THEN 41
+                WHEN COALESCE(_muhasebeHesap.CODE, '') = '360.01.01.00003' THEN 22
+                WHEN COALESCE(_muhasebeHesap.CODE, '') = '360.01.01.00004' THEN 141
+                ELSE 999
+            END AS BYNKOD,
+            1 AS Source -- Kaynak belirteci (1: lg_201)
+        FROM
+            lg_201_01_EMFLINE muhasebehareket
+            inner JOIN LG_201_01_EMFICHE _muhasebeFis ON muhasebehareket.ACCFICHEREF = _muhasebeFis.LOGICALREF
+            inner JOIN lg_201_EMUHACC _muhasebeHesap ON muhasebehareket.ACCOUNTREF = _muhasebeHesap.LOGICALREF
+            inner JOIN lg_201_01_ACCDISTDETLN ACC_AyrıntiTablosu ON muhasebehareket.LOGICALREF = ACC_AyrıntiTablosu.PREVLINEREF
+            inner JOIN lg_201_EMCENTER EMCENTER ON ACC_AyrıntiTablosu.CENTERREF = EMCENTER.LOGICALREF
+            inner JOIN lg_201_PROJECT PROJECT ON ACC_AyrıntiTablosu.PROJECTREF = PROJECT.LOGICALREF
+            inner JOIN LG_201_01_INVOICE FT ON FT.ACCFICHEREF = _muhasebeFis.LOGICALREF
+            inner JOIN LG_201_CLCARD CLC ON FT.CLIENTREF = CLC.LOGICALREF
+        WHERE
+            muhasebehareket.CANCELLED = 0
+            AND muhasebehareket.YEAR_ IN ('2025')
+            AND _muhasebeHesap.CODE LIKE ('360.01.01.%')
+
+        UNION ALL
+
+        -- İkinci veri kaynağı (lg_106)
+        SELECT
+            'BİZ' AS Firma,
+            CONVERT(nvarchar(20), _muhasebeFis.DATE_, 104) AS Tarih,
+            _muhasebeFis.BRANCH AS [İŞYERİ],
+            muhasebehareket.YEAR_ AS [YIL],
+            muhasebehareket.MONTH_ AS [AY],
+            LEFT(muhasebehareket.KEBIRCODE, 1) AS [GRUP],
+            CASE
+                WHEN LEFT(muhasebehareket.KEBIRCODE, 1) = 1 THEN 'SORUMLU SIFATIYLA İNDİRİLECEK'
+                WHEN LEFT(muhasebehareket.KEBIRCODE, 1) = 3 THEN 'ÖDENECEK STOPAJ'
+            END AS [GRUP AÇIKLAMA],
+            CASE
+                WHEN muhasebehareket.KEBIRCODE = 191 THEN '191.İNDİRİLECEK KDV'
+                WHEN muhasebehareket.KEBIRCODE = 360 THEN '360.ÖDENECEK VERGİ VE FONLAR'
+            END AS [KEBİR AÇIKLAMA],
+            muhasebehareket.KEBIRCODE AS [KEBİR],
+            muhasebehareket.LINEEXP AS [SATIR AÇIKLAMASI],
+            _muhasebeFis.FICHENO AS [FIS_NO],
+            _muhasebeHesap.CODE AS [HESAP KODU],
+            _muhasebeHesap.DEFINITION_ AS [HESAP ADI],
+            _muhasebeHesap.EXTNAME AS [HESAP ADI2],
+            _muhasebeHesap.SPECODE AS [ÖZEL KOD],
+            EMCENTER.CODE AS [M.M.Kodu],
+            EMCENTER.DEFINITION_ AS [M.M.Aciklamasi],
+            PROJECT.CODE AS [PROJE KODU],
+            PROJECT.NAME AS [PROJE ADI],
+            CLC.CODE AS [KOD],
+            RIGHT(CLC.DEFINITION_, CHARINDEX('-', REVERSE(CLC.DEFINITION_) + '-') - 1) AS IsimSoyisim,
+            CASE CLC.ISPERSCOMP
+                WHEN 0 THEN CLC.TAXNR
+                ELSE CLC.TCKNO
+            END AS [TC/V.NO],
+            CLC.TAXNR,
+            CLC.TCKNO,
+            CASE
+                WHEN CHARINDEX(',', muhasebehareket.LINEEXP) > 0
+                THEN SUBSTRING(muhasebehareket.LINEEXP, 1, CHARINDEX(',', muhasebehareket.LINEEXP) - 1)
+                ELSE muhasebehareket.LINEEXP
+            END AS [FATURA NO],
+            (CASE
+                WHEN muhasebehareket.SIGN = 1 AND ACC_AyrıntiTablosu.CREDEBNET <> 0 THEN ACC_AyrıntiTablosu.CREDEBNET
+                WHEN muhasebehareket.SIGN = 0 AND ACC_AyrıntiTablosu.CREDEBNET <> 0 THEN 0
+                ELSE muhasebehareket.CREDIT
+            END) AS [STOPAJ_TUTAR],
+            _muhasebeFis.TOTALACTIVE AS [FİŞ TOPLAMI],
+            CASE
+                WHEN muhasebehareket.TRCURR = 0 THEN 'TL'
+                WHEN muhasebehareket.TRCURR = 1 THEN 'USD'
+                WHEN muhasebehareket.TRCURR = 20 THEN 'EUR'
+            END AS [İD.TÜR],
+            _muhasebeFis.SPECODE AS [FİŞ ÖZELKOD],
+            CASE
+                WHEN COALESCE(CLC.TAXNR, '') IN ('1111111111', '2222222222') AND COALESCE(_muhasebeHesap.CODE, '') = '360.01.01.00004' THEN 284
+                WHEN COALESCE(_muhasebeHesap.CODE, '') = '360.01.01.00002' THEN 41
+                WHEN COALESCE(_muhasebeHesap.CODE, '') = '360.01.01.00003' THEN 22
+                WHEN COALESCE(_muhasebeHesap.CODE, '') = '360.01.01.00004' THEN 141
+                ELSE 999
+            END AS BYNKOD,
+            2 AS Source -- Kaynak belirteci (2: lg_106)
+        FROM
+            lg_106_01_EMFLINE muhasebehareket
+            inner JOIN LG_106_01_EMFICHE _muhasebeFis ON muhasebehareket.ACCFICHEREF = _muhasebeFis.LOGICALREF
+            inner JOIN lg_106_EMUHACC _muhasebeHesap ON muhasebehareket.ACCOUNTREF = _muhasebeHesap.LOGICALREF
+            inner JOIN lg_106_01_ACCDISTDETLN ACC_AyrıntiTablosu ON muhasebehareket.LOGICALREF = ACC_AyrıntiTablosu.PREVLINEREF
+            inner JOIN lg_106_EMCENTER EMCENTER ON ACC_AyrıntiTablosu.CENTERREF = EMCENTER.LOGICALREF
+            inner JOIN lg_106_PROJECT PROJECT ON ACC_AyrıntiTablosu.PROJECTREF = PROJECT.LOGICALREF
+            inner JOIN LG_106_01_INVOICE FT ON FT.ACCFICHEREF = _muhasebeFis.LOGICALREF
+            inner JOIN LG_106_CLCARD CLC ON FT.CLIENTREF = CLC.LOGICALREF
+        WHERE
+            muhasebehareket.CANCELLED = 0
+            AND muhasebehareket.YEAR_ IN ('2025')
+            AND _muhasebeHesap.CODE LIKE ('360.01.01.%')
+    ) AS CombinedData;
+
+    -- Tablo değişkeninden sonuçları seç
+    SELECT * FROM @CombinedTable;
+END;
+GO
+
+--EXEC [dbo].[Get_CS_MUHTASAR_1003A_Data];
