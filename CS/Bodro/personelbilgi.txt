@@ -1,0 +1,18 @@
+SELECT 
+    k.Name AS Ad, 
+    k.Surname AS Soyad, 
+    m.WAGE_WAGE AS "Brüt Ücret"
+FROM [LH_001_PNTCARD] m
+INNER JOIN LH_001_PERSON k ON m.PERREF = k.LREF
+ORDER BY m.WAGE_WAGE DESC;
+
+-- Tüm personellerin puantaj kartı bilgileri (Kod, İsim, İşe Başlama Tarihi, MNR, Brüt Ücret, Net Ücret)
+SELECT 
+    PERCODE AS "Personel Kodu", 
+    PERNAME AS "Personel Adı", 
+    PERDBEG AS "İşe Başlama Tarihi", 
+    MNR, 
+    WAGE_WAGE AS "Brüt Ücret", 
+    BALN_NETWAGE AS "Net Ücret"
+FROM [LH_001_PNTCARD]
+ORDER BY PERCODE;
