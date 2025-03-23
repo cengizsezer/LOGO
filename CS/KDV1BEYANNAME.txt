@@ -1,0 +1,130 @@
+
+ALTER VIEW [dbo].[CS_KDV1_BEYANNAME] as
+
+SELECT 
+        'TEZ_MEDİKAL' AS Firma, 
+        CONVERT(nvarchar(20), _muhasebeFis.DATE_, 104) AS Tarih,
+
+        muhasebehareket.YEAR_ AS [YIL],
+
+        muhasebehareket.MONTH_ AS [AY], 
+
+        CASE muhasebehareket.KEBIRCODE
+            WHEN   191 THEN '191.İNDİRİLECEK KDV'
+			WHEN  360 THEN '360.KDV-SORUMLU SIFATIYLA ÖDENEN İNDİRİLECEK KDV'
+            WHEN  391 THEN '391.HESAPLANAN KDV'
+        END AS [KEBİR AÇIKLAMA],
+
+        muhasebehareket.KEBIRCODE AS [KEBİR],
+        muhasebehareket.LINEEXP AS [SATIR AÇIKLAMASI],
+        _muhasebeFis.FICHENO AS [FIS_NO],
+        _muhasebeHesap.CODE AS [HESAP KODU],
+        _muhasebeHesap.DEFINITION_ AS [HESAP ADI],
+        _muhasebeHesap.EXTNAME AS [HESAP ADI2],
+        _muhasebeHesap.SPECODE AS [ÖZEL KOD],
+        EMCENTER.CODE AS [M.M.Kodu],   
+        EMCENTER.DEFINITION_ AS [M.M.Aciklamasi],   
+        PROJECT.CODE AS [PROJE KODU],
+        PROJECT.NAME AS [PROJE ADI],
+        CLC.CODE AS [KOD],
+        RIGHT(CLC.DEFINITION_, CHARINDEX('-', REVERSE(CLC.DEFINITION_) + '-') - 1) AS IsimSoyisim,
+        CASE CLC.ISPERSCOMP 
+            WHEN 0 THEN CLC.TAXNR 
+            ELSE CLC.TCKNO 
+        END AS [TC/V.NO],
+        CLC.TAXNR,
+        CLC.TCKNO, 
+
+		CASE 
+			WHEN CHARINDEX(',', muhasebehareket.LINEEXP) > 0 
+			THEN SUBSTRING(muhasebehareket.LINEEXP, 1, CHARINDEX(',', muhasebehareket.LINEEXP) - 1)
+			ELSE muhasebehareket.LINEEXP
+			END AS [FATURA NO],
+          (CASE  
+        WHEN muhasebehareket.SIGN=0 AND  ACC_AyrıntiTablosu.CREDEBNET<>0 THEN ACC_AyrıntiTablosu.CREDEBNET   
+        WHEN muhasebehareket.SIGN=1 AND  ACC_AyrıntiTablosu.CREDEBNET<>0 THEN 0  
+ELSE muhasebehareket.DEBIT END) BORC,  
+(CASE WHEN muhasebehareket.SIGN=1 AND  ACC_AyrıntiTablosu.CREDEBNET<>0 THEN ACC_AyrıntiTablosu.CREDEBNET   
+    WHEN muhasebehareket.SIGN=0 AND  ACC_AyrıntiTablosu.CREDEBNET<>0 THEN 0  
+ELSE muhasebehareket.CREDIT END )*-1 ALACAK,  
+
+ROUND((CASE  
+        WHEN muhasebehareket.SIGN=0 AND  ACC_AyrıntiTablosu.CREDEBNET<>0 THEN ACC_AyrıntiTablosu.CREDEBNET   
+        WHEN muhasebehareket.SIGN=1 AND  ACC_AyrıntiTablosu.CREDEBNET<>0 THEN 0  
+ELSE muhasebehareket.DEBIT END)+(  
+(CASE WHEN muhasebehareket.SIGN=1 AND  ACC_AyrıntiTablosu.CREDEBNET<>0 THEN ACC_AyrıntiTablosu.CREDEBNET   
+    WHEN muhasebehareket.SIGN=0 AND  ACC_AyrıntiTablosu.CREDEBNET<>0 THEN 0  
+ELSE muhasebehareket.CREDIT END )*-1),2) BAKIYE, 
+_muhasebeFis.TOTALACTIVE [FİŞ TOPLAMI],
+CASE WHEN muhasebehareket.TRCURR=0 THEN 'TL' WHEN muhasebehareket.TRCURR=1 THEN 'USD' WHEN muhasebehareket.TRCURR=20 THEN 'EUR' END [İD.TÜR],
+     
+
+        _muhasebeFis.SPECODE AS [FİŞ ÖZELKOD],
+
+--	CASE FT.TRCODE  
+--    WHEN 1 THEN 'SATINALMA FAT.'  
+--    WHEN 4 THEN 'ALINAN HİZMET FAT.'  
+--    WHEN 6 THEN 'SATIN ALMA İADE FAT.'  
+--    WHEN 5 THEN 'ALINAN PROFORMA FAT.'  
+--    WHEN 2 THEN 'PARAKENDE İADE FAT.'  
+--    WHEN 3 THEN 'TOPTAN SATIŞ İADE FAT.'  
+--    WHEN 7 THEN 'PARAKENDE SATIŞ FAT.'  
+--    WHEN 8 THEN 'TOPTAN SATIŞ FAT.'  
+--    WHEN 9 THEN 'VERİLEN HİZMET FAT.'  
+--END AS 'FİŞ TÜRÜ'
+
+    (SELECT TOP 1 STL.DEDUCTCODE 
+     FROM LG_201_01_STLINE STL
+     WHERE STL.INVOICEREF = FT.LOGICALREF) AS [TevkifatKodu],
+
+	  (SELECT TOP 1 STL.DEDUCTIONPART1 
+     FROM LG_201_01_STLINE STL
+     WHERE STL.INVOICEREF = FT.LOGICALREF) AS TEV_PAY,
+
+	  (SELECT TOP 1 STL.DEDUCTIONPART2 
+     FROM LG_201_01_STLINE STL
+     WHERE STL.INVOICEREF = FT.LOGICALREF) AS TEV_PAYDA,
+
+	  (SELECT TOP 1 STL.VAT 
+     FROM LG_201_01_STLINE STL
+     WHERE STL.INVOICEREF = FT.LOGICALREF) AS [KDV ORANI],
+--	 ,srv.code [HIZMET_KODU]
+--,SRV.DEFINITION_ [HIZMET_ADI]
+--,STL.DEDUCTCODE 'TEVKIFAT_KODU',
+--,STL.DEDUCTIONPART1 'TEV_PAY'
+--,STL.DEDUCTIONPART2 'TEV_PAYDA'
+--,STL.VATMATRAH 'KDV MATRAH'
+--,STL.VAT 'KDV ORANI'
+--,STL.VATMATRAH*((STL.VAT)*0.01) '20 KDV'
+--,STL.VATMATRAH*((STL.VAT)*0.01)-ROUND(((STL.VATMATRAH / 100) * STL.VAT ) - STL.VATAMNT,2) 'TEV'
+
+
+--,ROUND(((STL.VATMATRAH / 100) * STL.VAT ) - STL.VATAMNT,2) 'TEVKIFAT'
+--,FT.NETTOTAL 'FAT TOPLAMI',
+
+   muhasebehareket.ACCFICHEREF AS [muhasebehareket ACCFICHEREF],
+     _muhasebeFis.LOGICALREF AS [FİŞ LOGICALREF], -- Fişin bağlantı değeri
+  muhasebehareket.ACCOUNTREF AS [muhasebehareket ACCOUNTREF],
+  _muhasebeHesap.LOGICALREF AS [_muhasebeHesap LOGICALREF],
+    FT.ACCFICHEREF AS [FT ACCFICHEREF],
+	FT.LOGICALREF AS [FT LOGICALREF]
+	--STL.INVOICEREF AS [STL.INVOICEREF]
+    FROM 
+        lg_201_01_EMFLINE muhasebehareket   
+        INNER JOIN LG_201_01_EMFICHE _muhasebeFis ON muhasebehareket.ACCFICHEREF = _muhasebeFis.LOGICALREF
+        INNER JOIN lg_201_EMUHACC _muhasebeHesap ON muhasebehareket.ACCOUNTREF = _muhasebeHesap.LOGICALREF
+        INNER JOIN lg_201_01_ACCDISTDETLN ACC_AyrıntiTablosu ON  muhasebehareket.LOGICALREF = ACC_AyrıntiTablosu.PREVLINEREF
+        INNER JOIN lg_201_EMCENTER EMCENTER ON ACC_AyrıntiTablosu.CENTERREF = EMCENTER.LOGICALREF
+        INNER JOIN lg_201_PROJECT PROJECT ON   ACC_AyrıntiTablosu.PROJECTREF = PROJECT.LOGICALREF
+		INNER JOIN LG_201_01_INVOICE FT ON FT.ACCFICHEREF = _muhasebeFis.LOGICALREF
+		INNER JOIN LG_201_CLCARD CLC ON FT.CLIENTREF = CLC.LOGICALREF
+		--INNER JOIN LG_201_01_STLINE STL ON STL.INVOICEREF=FT.LOGICALREF
+  --      INNER JOIN LG_201_SRVCARD SRV ON SRV.LOGICALREF=STL.STOCKREF
+      
+    WHERE 
+        muhasebehareket.CANCELLED = 0  
+		AND muhasebehareket.YEAR_ IN ('2025')
+		--and muhasebehareket.MONTH_ IN ('1')
+		AND (_muhasebeHesap.CODE LIKE '391.%' 
+			OR _muhasebeHesap.CODE LIKE '191.%' 
+			OR _muhasebeHesap.CODE = '360.01.03.00002')
